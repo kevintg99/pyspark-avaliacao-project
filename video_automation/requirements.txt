@@ -1,0 +1,20 @@
+# Núcleo
+requests>=2.31
+PyYAML>=6.0
+python-dotenv>=1.0
+numpy>=1.26
+pillow>=10.0
+pydantic>=2.6
+
+# Análise de cenas com Claude (recomendado)
+anthropic>=1.9
+
+# Transcrição com timestamps por palavra (recomendado)
+faster-whisper>=1.0
+
+# Ranking visual imagem-texto (recomendado; puxa o PyTorch)
+open_clip_torch>=2.24
+torch>=2.2
+
+# Testes
+pytest>=8.0

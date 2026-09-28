@@ -1,0 +1,11 @@
+.env
+.cache/
+.work/
+__pycache__/
+*.pyc
+.pytest_cache/
+video_final.mp4
+report.json
+library/**/*
+!library/**/
+!library/**/.gitkeep

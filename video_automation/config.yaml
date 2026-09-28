@@ -1,0 +1,101 @@
+# Configuração do broll-bot. Todos os campos são opcionais (há defaults no código).
+seed: 42
+
+output:
+  width: 1920
+  height: 1080
+  fps: 30
+  crf: 20
+  preset: medium
+  audio_bitrate: 192k
+
+paths:
+  work_dir: .work          # intermediários e logs por execução
+  cache_dir: .cache        # cache de buscas, thumbnails, embeddings e mídias baixadas
+  local_library: library/mixkit
+
+transcription:
+  enabled: true
+  model: small             # tiny | base | small | medium | large-v3
+  device: auto             # auto | cpu | cuda
+  compute_type: default    # ex.: int8 para CPU mais leve
+  language: pt
+
+analysis:
+  provider: anthropic      # anthropic (Claude) | heuristic (offline)
+  model: claude-opus-5-5
+  effort: medium           # low | medium | high
+  max_tokens: 16000
+  target_scene_seconds: 12
+  min_scene_seconds: 3
+  max_scene_seconds: 25
+  script_language: pt
+
+search:
+  provider_order: [mixkit_local, pexels, pixabay]   # ordem de fallback
+  max_searches_per_scene: 3      # chamadas de API por cena (cache hit não conta)
+  local_counts_toward_budget: false
+  per_page: 15
+  min_score: 0.45                # abaixo disso a cena reformula a busca
+  reserve_per_scene: 1
+  image_ratio: 0.2               # fração aproximada de shots com imagem (Ken Burns)
+  min_width: 1280
+  orientation: landscape
+  cache_ttl_hours: 24            # a Pixabay exige cache de 24h
+  max_rank_candidates: 16
+  similarity_threshold: 0.93     # evita clipes quase iguais em sequência
+  circuit_breaker:
+    failure_threshold: 3
+    cooldown_seconds: 300
+
+providers:
+  pexels:
+    enabled: true
+    requests_per_minute: 3       # limite oficial: 200/hora e 20.000/mês
+    burst: 5
+    max_wait_seconds: 20
+    max_retries: 3
+    locale: en-US
+  pixabay:
+    enabled: true
+    requests_per_minute: 90      # limite oficial: 100 a cada 60s
+    burst: 10
+    max_wait_seconds: 20
+    max_retries: 3
+    locale: en
+  mixkit_local:
+    enabled: true
+
+ranking:
+  use_clip: true
+  clip_model: ViT-B-32
+  clip_pretrained: laion2b_s34b_b79k
+  device: auto
+  weights:
+    semantic: 0.65
+    quality: 0.12
+    duration: 0.10
+    orientation: 0.08
+    text_penalty: 0.25
+    negative_penalty: 0.30
+
+timeline:
+  min_clip_seconds: 2.2
+  max_clip_seconds: 7.0          # teto absoluto por b-roll (inclui a transição)
+  snap_to_words: true            # cortes internos caem nas pausas da fala
+  snap_tolerance: 0.6            # até quanto um corte pode andar para cair numa pausa
+  hard_cut_probability_in_scene: 0.35
+  hard_cut_probability_scene_change: 0.10
+  transition_min: 0.2
+  transition_max: 0.6
+  transitions: [fade, dissolve, fadeblack, smoothleft, smoothright, smoothup, slideleft, slideright,
+                wipeleft, wiperight, circleopen, hblur, coverleft, revealright, zoomin]
+  video_layouts: {full: 0.35, zoom_crop: 0.30, push: 0.20, inset: 0.15}
+  image_layouts: {kenburns: 0.75, inset: 0.25}
+
+render:
+  chunk_size: 12                 # shots por bloco de renderização
+  workers: 2                     # shots renderizados em paralelo
+  intermediate_crf: 15
+  intermediate_preset: veryfast
+  keep_intermediates: false

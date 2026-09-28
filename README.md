@@ -34,3 +34,7 @@ Clone o repositório, abra o notebook na pasta `notebooks/` e execute no Google 
 
 ```bash
 git clone https://github.com/kevintg99/pyspark-avaliacao-project.git
+
+## 🎬 Automação de edição de vídeo (b-roll)
+
+A pasta [`video_automation/`](video_automation/) contém um projeto independente: recebe a narração (.mp3) e o roteiro e gera um `video_final.mp4` com b-rolls sincronizados (Pexels, Pixabay e biblioteca local do Mixkit) e transições via FFmpeg. Veja o [README do projeto](video_automation/README.md).
