@@ -14,6 +14,7 @@ from .log import get_logger
 from .media import FFmpegError, probe
 from .models import Candidate, MediaType, Shot
 from .providers.base import BaseProvider
+from .providers.local_library import LocalLibraryProvider
 from .ranking import Ranker
 from .search import SceneSearchResult
 
@@ -103,6 +104,9 @@ class Selector:
                 choice = self._pick([own], shot.prefer_media, None) or self._pick(neighbors, shot.prefer_media, min_score)
                 reason = "below_min_score_or_neighbor" if choice else None
             if choice is None:
+                choice = self._library_last_resort(shot)
+                reason = "library_last_resort" if choice else None
+            if choice is None:
                 reuse = self._reuse_candidate(own)
                 if reuse is not None:
                     choice = (reuse, self.path_map[reuse.key])
@@ -131,13 +135,35 @@ class Selector:
         self.prev_layout = shot.layout["name"]
         self._set_offset(shot, rng)
 
+    def _library_last_resort(self, shot: Shot) -> tuple[Candidate, Path] | None:
+        """Nada casou com a cena: melhor um clipe da biblioteca local do usuário
+        (ainda não usado) do que um fundo gerado."""
+        pool = [c for p in self.providers.values() if isinstance(p, LocalLibraryProvider) for c in p.entries]
+        pool = [c for c in pool if c.key not in self.used_keys and c.key not in self.failed_keys]
+        if not pool:
+            return None
+        rng = random.Random(self.seed * 7919 + shot.index)
+        rng.shuffle(pool)
+        pool.sort(key=lambda c: c.media_type is not shot.prefer_media)
+        return self._pick([pool], shot.prefer_media, None)
+
     def _reuse_candidate(self, own: list[Candidate]) -> Candidate | None:
-        """Último plano B com mídia real: o clipe já baixado mais relevante para a
-        cena (com outro enquadramento e ponto de entrada), evitando repetir o anterior."""
+        """Último plano B com mídia real: repete um clipe já baixado (com outro
+        enquadramento e ponto de entrada). Prioriza os relevantes para a cena e,
+        entre eles, o menos usado e há mais tempo; nunca o mesmo do shot anterior."""
+        last_use: dict[str, int] = {}
+        uses: dict[str, int] = {}
+        for pos, c in enumerate(self.recent):
+            last_use[c.key] = pos
+            uses[c.key] = uses.get(c.key, 0) + 1
+        by_key = {c.key: c for c in reversed(self.recent) if c.key in self.path_map}
         last = self.recent[-1].key if self.recent else None
-        options = [c for c in sorted(own, key=lambda c: -c.score) if c.key in self.path_map]
-        options += [c for c in reversed(self.recent) if c.key in self.path_map]
-        return next((c for c in options if c.key != last), options[0] if options else None)
+        options = [k for k in by_key if k != last] or list(by_key)
+        if not options:
+            return None
+        own_keys = {c.key for c in own if c.score >= self.cfg.search.min_score}
+        best = min(options, key=lambda k: (k not in own_keys, uses[k], last_use[k]))
+        return by_key[best]
 
     def _register(self, cand: Candidate, path: Path) -> None:
         self.path_map[cand.key] = path

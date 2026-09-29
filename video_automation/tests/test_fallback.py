@@ -156,3 +156,44 @@ def test_unreachable_source_is_disabled_after_first_failure(tmp_path):
     for q in ("q1", "q2", "q3"):
         searcher.search_scene(scene(queries=(q,)), needed=1, needed_images=0, used_keys=set())
     assert len(offline.calls) == 1
+
+
+# ------------------------------------------------------------ seleção/planos B
+def _selector(tmp_path, library_files):
+    from broll_bot.models import Shot, Transition
+    from broll_bot.providers.local_library import LocalLibraryProvider
+    from broll_bot.selection import Selector
+
+    cfg = AppConfig()
+    lib = LocalLibraryProvider(tmp_path / "lib", tmp_path / "index.json")
+    lib._entries = [
+        Candidate("mixkit_local", name, MediaType.VIDEO, 1920, 1080, 10.0, None, None,
+                  tags=name.split("-"), local_path=str(tmp_path / name))
+        for name in library_files
+    ]
+    sel = Selector(cfg, {"mixkit_local": lib}, Ranker(cfg, None, None), tmp_path / "media", seed=1)
+    sel.fetch = lambda c: Path(c.local_path)  # sem ffprobe no teste
+    shots = [Shot(i, 0, i * 4.0, i * 4.0 + 4, 4.123, Transition("cut", 0), i * 120, i * 120 + 120) for i in range(6)]
+    return sel, shots
+
+
+def test_unmatched_scene_uses_unused_library_clips_before_repeating(tmp_path):
+    sel, shots = _selector(tmp_path, ["office-laptop", "city-night", "coffee-cup"])
+    sel.assign(shots[:3], {})
+    assert {s.candidate.media_id for s in shots[:3]} == {"office-laptop", "city-night", "coffee-cup"}
+    assert all(s.fallback_reason == "library_last_resort" for s in shots[:3])
+
+
+def test_reuse_rotates_instead_of_ping_pong(tmp_path):
+    sel, shots = _selector(tmp_path, ["a-clip", "b-clip", "c-clip"])
+    sel.assign(shots, {})
+    ids = [s.candidate.media_id for s in shots]
+    assert all(x != y for x, y in zip(ids, ids[1:]))  # nunca repete em sequência
+    assert sorted(ids[3:]) == ["a-clip", "b-clip", "c-clip"]  # repete todos antes de voltar a um
+    assert all(s.fallback_reason == "reused_with_new_framing" for s in shots[3:])
+
+
+def test_generated_background_only_when_nothing_exists(tmp_path):
+    sel, shots = _selector(tmp_path, [])
+    sel.assign(shots[:1], {})
+    assert shots[0].fallback_reason == "generated_background"
